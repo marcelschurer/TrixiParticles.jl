@@ -443,6 +443,25 @@ function kick!(dv_ode, v_ode, u_ode, semi, t)
         @trixi_timeit timer() "source terms" add_source_terms!(dv_ode, v_ode, u_ode, semi)
     end
 
+    my_simulation_4.jl
+    system_index = 2 # 2 --> FluidSystem
+    foreach_system(semi) do system
+        dv = wrap_v(dv_ode, system, semi)
+        u = wrap_u(u_ode, system, semi)
+
+        @threaded for particle in eachparticle(system)
+            coords = current_coords(u, system, particle)
+
+            if system_indices(system, semi) == system_index && coords[1] <= 200 * 0.02 # x-coordinate of the particle
+                dv[1, particle] = 0.0
+                dv[2, particle] = 0.0
+            end
+            # if system_indices(system, semi) == system_index && coords[1] <= 10 * 0.02 # x-coordinate of the particle
+            #     set_zero!(dv)
+            # end
+        end
+    end
+
     return dv_ode
 end
 
