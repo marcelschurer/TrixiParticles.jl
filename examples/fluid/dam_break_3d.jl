@@ -14,7 +14,7 @@ boundary_particle_spacing = fluid_particle_spacing / spacing_ratio
 # ==========================================================================================
 # ==== Experiment Setup
 gravity = 9.81
-tspan = (0.0, 5.7 / sqrt(gravity))
+tspan = (0.0, 3.0)
 
 # Boundary geometry and initial fluid particle positions
 initial_fluid_size = (2.0, 1.0, 1.0)
