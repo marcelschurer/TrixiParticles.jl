@@ -1,81 +1,190 @@
+# 2D channel flow simulation with open boundaries.
+
 using TrixiParticles
 using OrdinaryDiffEq
 
 # ==========================================================================================
 # ==== Resolution
-fluid_particle_spacing = 0.05
+particle_spacing = 0.1 # following https://doi.org/10.1016/j.cma.2020.113119
 
 # Make sure that the kernel support of fluid particles at a boundary is always fully sampled
 boundary_layers = 3
 
+# Make sure that the kernel support of fluid particles at an open boundary is always
+# fully sampled.
+# Note: Due to the dynamics at the inlets and outlets of open boundaries,
+# it is recommended to use `open_boundary_layers > boundary_layers`
+open_boundary_layers = 6 # following https://doi.org/10.1016/j.cma.2020.113119
+
 # ==========================================================================================
 # ==== Experiment Setup
-gravity = 9.81
-tspan = (0.0, 1.0)
+tspan = (0.0, 3.0)
+flow_direction = [1.0, 0.0]
+const prescribed_velocity = 1.0 # following https://doi.org/10.1016/j.cma.2020.113119 
+sound_speed = 10 * prescribed_velocity # following https://doi.org/10.1016/j.cma.2020.113119 
 
-# Boundary geometry and initial fluid particle positions
-initial_fluid_size = (1.0, 0.9)
-tank_size = (1.0, 1.0)
+# length of domain and initial fluid particle positions
+L = 300 # following http://dx.doi.org/10.1017/S0022112083002839 (200mm/500mm)
+h = 4.9 # following http://dx.doi.org/10.1017/S0022112083002839
+reynolds_number = 389 # following https://doi.org/10.1016/j.cma.2020.113119
+fluid_density = 1225.0 # following https://doi.org/10.1016/j.cma.2020.113119
 
-fluid_density = 1000.0
-sound_speed = 10.0
+# For this particular example, it is necessary to have a background pressure.
+# Otherwise the suction at the outflow is to big and the simulation becomes unstable.
+pressure = 1.0 # following https://doi.org/10.1016/j.cma.2020.113119
+
 state_equation = StateEquationCole(; sound_speed, reference_density=fluid_density,
-                                   exponent=7, clip_negative_pressure=false)
+                                   exponent=7, background_pressure=pressure)
 
-# ==========================================================================================
-# ==== Loading Files
-file_boundary_out = joinpath("examples", "preprocessing", "sketch_of_domain_2d",
-                             "boundary_out.asc")
-shape_boundary_out = load_shape(file_boundary_out)
-ic_boundary_out = ComplexShape(shape_boundary_out; particle_spacing, density=fluid_density)
+fluid_size_inlet = (Int(floor(0.25 * L / particle_spacing)),
+                    Int(floor(5.2 / particle_spacing)))
+fluid_size_outlet = (Int(floor(0.75 * L / particle_spacing)),
+                     Int(floor((h + 5.2) / particle_spacing)))
 
-file_boundary_in = joinpath("examples", "preprocessing", "sketch_of_domain_2d",
-                            "boundary_in.asc")
-shape_boundary_in = load_shape(file_boundary_in)
-ic_boundary_in = ComplexShape(shape_boundary_in; particle_spacing, density=fluid_density)
+fluid_inlet = RectangularShape(particle_spacing,
+                               fluid_size_inlet, (0.0, 0.0),
+                               pressure=pressure,
+                               density=fluid_density)
 
-boundary = setdiff(ic_boundary_out, ic_boundary_in)
+fluid_outlet = RectangularShape(particle_spacing,
+                                fluid_size_outlet, (0.25 * L, -h), pressure=pressure,
+                                density=fluid_density)
+
+ic_fluid = union(fluid_inlet, fluid_outlet)
+
+boundary_top = RectangularShape(particle_spacing,
+                                ((fluid_size_inlet[1] + fluid_size_outlet[1] +
+                                  2 * open_boundary_layers),
+                                 boundary_layers),
+                                (-open_boundary_layers * particle_spacing,
+                                 fluid_size_inlet[2] * particle_spacing),
+                                pressure=pressure,
+                                density=fluid_density)
+
+boundary_bottom_left = RectangularShape(particle_spacing,
+                                        (fluid_size_inlet[1] + open_boundary_layers,
+                                         boundary_layers),
+                                        (-open_boundary_layers * particle_spacing,
+                                         -boundary_layers * particle_spacing),
+                                        pressure=pressure,
+                                        density=fluid_density)
+
+boundary_bottom_right = RectangularShape(particle_spacing,
+                                         (fluid_size_outlet[1] + open_boundary_layers,
+                                          boundary_layers),
+                                         (fluid_size_inlet[1] * particle_spacing,
+                                          -(fluid_size_outlet[2] - fluid_size_inlet[2] +
+                                            boundary_layers) * particle_spacing),
+                                         pressure=pressure,
+                                         density=fluid_density)
+
+boundary_left = RectangularShape(particle_spacing,
+                                 (boundary_layers,
+                                  fluid_size_outlet[2] - fluid_size_inlet[2]),
+                                 ((fluid_size_inlet[1] - boundary_layers) *
+                                  particle_spacing,
+                                  -(fluid_size_outlet[2] - fluid_size_inlet[2] +
+                                    boundary_layers) *
+                                  particle_spacing),
+                                 pressure=pressure,
+                                 density=fluid_density)
+
+ic_boundary = union(boundary_top, boundary_bottom_left, boundary_bottom_right,
+                    boundary_left)
+
 # ==========================================================================================
 # ==== Fluid
-smoothing_length = 1.2 * fluid_particle_spacing
-smoothing_kernel = SchoenbergCubicSplineKernel{2}()
-
-viscosity = ArtificialViscosityMonaghan(alpha=0.02, beta=0.0)
+smoothing_length = 3.0 * particle_spacing
+smoothing_kernel = SchoenbergQuinticSplineKernel{2}() # following https://doi.org/10.1016/j.cma.2020.113119
 
 fluid_density_calculator = ContinuityDensity()
-fluid_system = WeaklyCompressibleSPHSystem(tank.fluid, fluid_density_calculator,
-                                           state_equation, smoothing_kernel,
-                                           smoothing_length, viscosity=viscosity,
-                                           acceleration=(0.0, -gravity),
-                                           source_terms=nothing)
+
+kinematic_viscosity = 4 * h / (3 * reynolds_number * prescribed_velocity) # following https://doi.org/10.1016/j.cma.2020.113119
+
+viscosity = ViscosityAdami(nu=kinematic_viscosity)
+
+n_buffer_particles = open_boundary_layers * fluid_size_outlet[2]
+
+fluid_system = EntropicallyDampedSPHSystem(ic_fluid, smoothing_kernel,
+                                           smoothing_length,
+                                           sound_speed, viscosity=viscosity,
+                                           density_calculator=fluid_density_calculator,
+                                           buffer_size=n_buffer_particles)
+
+# Alternatively the WCSPH scheme can be used
+# alpha = 8 * kinematic_viscosity / (smoothing_length * sound_speed)
+# viscosity = ArtificialViscosityMonaghan(; alpha, beta=0.0)
+
+# fluid_system = WeaklyCompressibleSPHSystem(ic_fluid, fluid_density_calculator,
+#                                            state_equation, smoothing_kernel,
+#                                            smoothing_length, viscosity=viscosity,
+#                                            buffer_size=n_buffer_particles)
+
+# ==========================================================================================
+# ==== Open Boundary
+function velocity_function(pos, t)
+    # Use this for a time-dependent inflow velocity
+    # return SVector(0.5prescribed_velocity * sin(2pi * t) + prescribed_velocity, 0)
+
+    return SVector(prescribed_velocity, 0.0)
+end
+
+inflow = InFlow(; plane=([0.0, 0.0], [0.0, fluid_size_inlet[2] * particle_spacing]),
+                flow_direction,
+                open_boundary_layers, density=fluid_density, particle_spacing)
+
+open_boundary_in = OpenBoundarySPHSystem(inflow; sound_speed, fluid_system,
+                                         buffer_size=n_buffer_particles,
+                                         reference_pressure=pressure,
+                                         reference_velocity=velocity_function)
+
+outflow = OutFlow(;
+                  plane=([
+                             (fluid_size_inlet[1] + fluid_size_outlet[1]) *
+                             particle_spacing,
+                             (fluid_size_inlet[2] - fluid_size_outlet[2]) *
+                             particle_spacing
+                         ],
+                         [
+                             (fluid_size_inlet[1] + fluid_size_outlet[1]) *
+                             particle_spacing,
+                             fluid_size_inlet[2] * particle_spacing
+                         ]),
+                  flow_direction, open_boundary_layers, density=fluid_density,
+                  particle_spacing)
+
+open_boundary_out = OpenBoundarySPHSystem(outflow; sound_speed, fluid_system,
+                                          buffer_size=n_buffer_particles,
+                                          reference_pressure=pressure,
+                                          reference_velocity=velocity_function)
 
 # ==========================================================================================
 # ==== Boundary
 
-# This is to set another boundary density calculation with `trixi_include`
-boundary_density_calculator = AdamiPressureExtrapolation()
-
-# This is to set wall viscosity with `trixi_include`
-viscosity_wall = nothing
-boundary_model = BoundaryModelDummyParticles(tank.boundary.density, tank.boundary.mass,
+boundary_model = BoundaryModelDummyParticles(ic_boundary.density,
+                                             ic_boundary.mass,
+                                             AdamiPressureExtrapolation(),
                                              state_equation=state_equation,
-                                             boundary_density_calculator,
-                                             smoothing_kernel, smoothing_length,
-                                             viscosity=viscosity_wall)
-boundary_system = BoundarySPHSystem(tank.boundary, boundary_model, movement=nothing)
+                                             #viscosity=ViscosityAdami(nu=1e-4),
+                                             smoothing_kernel, smoothing_length)
+
+boundary_system = BoundarySPHSystem(ic_boundary, boundary_model)
 
 # ==========================================================================================
 # ==== Simulation
-semi = Semidiscretization(fluid_system, boundary_system)
+semi = Semidiscretization(fluid_system, open_boundary_in, open_boundary_out,
+                          boundary_system)
+
 ode = semidiscretize(semi, tspan)
 
-info_callback = InfoCallback(interval=50)
-saving_callback = SolutionSavingCallback(dt=0.02, prefix="")
+info_callback = InfoCallback(interval=100)
+saving_callback = SolutionSavingCallback(dt=0.02, prefix="",
+                                         output_directory="out_my_simulation")
 
-# This is to easily add a new callback with `trixi_include`
-extra_callback = nothing
+callbacks = CallbackSet(info_callback, saving_callback, UpdateCallback())
 
-callbacks = CallbackSet(info_callback, saving_callback, extra_callback)
-
-# Use a Runge-Kutta method with automatic (error based) time step size control
-sol = solve(ode, RDPK3SpFSAL35(), save_everystep=false, callback=callbacks);
+sol = solve(ode, RDPK3SpFSAL35(),
+            abstol=1e-5, # Default abstol is 1e-6 (may need to be tuned to prevent boundary penetration)
+            reltol=1e-3, # Default reltol is 1e-3 (may need to be tuned to prevent boundary penetration)
+            dtmax=1e-2, # Limit stepsize to prevent crashing
+            save_everystep=false, callback=callbacks);

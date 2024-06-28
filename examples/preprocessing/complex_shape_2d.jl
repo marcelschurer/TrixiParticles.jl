@@ -2,7 +2,7 @@ using TrixiParticles
 
 particle_spacing = 0.05
 
-file = "hexagon"
+file = "sketch_of_domain_boundary"
 filename = joinpath("examples", "preprocessing", file * ".asc")
 
 # Returns `Shape`
