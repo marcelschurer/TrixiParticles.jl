@@ -18,20 +18,20 @@ open_boundary_layers = 6 # following https://doi.org/10.1016/j.cma.2020.113119
 
 # ==========================================================================================
 # ==== Experiment Setup
-tspan = (0.0, 10.0)
+tspan = (0.0, 5.0)
 flow_direction = [1.0, 0.0]
 const prescribed_velocity = 1.0 # following https://doi.org/10.1016/j.cma.2020.113119 
 sound_speed = 10 * prescribed_velocity # following https://doi.org/10.1016/j.cma.2020.113119 
 
 # length of domain and initial fluid particle positions
-L = 40 # following http://dx.doi.org/10.1017/S0022112083002839 (200mm/500mm)
+L = 20 # following http://dx.doi.org/10.1017/S0022112083002839 (200mm/500mm)
 h = 4.9 # Stepsize following http://dx.doi.org/10.1017/S0022112083002839
 reynolds_number = 389 # following https://doi.org/10.1016/j.cma.2020.113119
 fluid_density = 1225.0 # following https://doi.org/10.1016/j.cma.2020.113119
 
 # For this particular example, it is necessary to have a background pressure.
 # Otherwise the suction at the outflow is to big and the simulation becomes unstable.
-pressure = 1000.0 # 1.0 following https://doi.org/10.1016/j.cma.2020.113119
+pressure = 700.0 # 1.0 following https://doi.org/10.1016/j.cma.2020.113119
 
 state_equation = StateEquationCole(; sound_speed, reference_density=fluid_density,
                                    exponent=7, background_pressure=pressure) #exponent 7
@@ -94,8 +94,8 @@ ic_boundary = union(boundary_top, boundary_bottom_left, boundary_bottom_right,
 
 # ==========================================================================================
 # ==== Fluid
-smoothing_length = 1.2 * particle_spacing
-smoothing_kernel = SchoenbergQuinticSplineKernel{2}() # SchoenbergQuinticSplineKernel/WendlandC2Kernel following https://doi.org/10.1016/j.cma.2020.113119
+smoothing_length = 3 * particle_spacing
+smoothing_kernel = WendlandC2Kernel{2}() # SchoenbergQuinticSplineKernel/WendlandC2Kernel following https://doi.org/10.1016/j.cma.2020.113119
 
 fluid_density_calculator = ContinuityDensity()
 
@@ -131,10 +131,10 @@ end
 
 function velocity_function_outlet(pos, t)
     # Use this for a time-dependent inflow velocity
-    # return SVector(0.5prescribed_velocity * sin(2pi * t) + prescribed_velocity, 0)
-
+    #return SVector(0.5prescribed_velocity * sin(2pi * t) + prescribed_velocity, 0)
+    return SVector(0.2(1 + tanh(5(t - 1.7))), 0)
     # return SVector((5.2 / (4.9 + 5.2)) * prescribed_velocity, 0.0)
-    return SVector((0.0, 0.0))
+    #return SVector((0.0, 0.0))
 end
 
 inflow = InFlow(; plane=([0.0, 0.0], [0.0, fluid_size_inlet[2] * particle_spacing]),

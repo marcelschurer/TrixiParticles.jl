@@ -21,7 +21,7 @@ open_boundary_layers = 6
 tspan = (0.0, 1.5)
 
 # Boundary geometry and initial fluid particle positions
-domain_size = (100.0, 3.0)
+domain_size = (40.0, 3.0)
 
 flow_direction = [1.0, 0.0]
 reynolds_number = 100
