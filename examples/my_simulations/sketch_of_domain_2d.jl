@@ -8,7 +8,7 @@ using OrdinaryDiffEq
 particle_spacing = 0.1 # following https://doi.org/10.1016/j.cma.2020.113119
 
 # Make sure that the kernel support of fluid particles at a boundary is always fully sampled
-boundary_layers = 3
+boundary_layers = 4
 
 # Make sure that the kernel support of fluid particles at an open boundary is always
 # fully sampled.
@@ -18,23 +18,23 @@ open_boundary_layers = 6 # following https://doi.org/10.1016/j.cma.2020.113119
 
 # ==========================================================================================
 # ==== Experiment Setup
-tspan = (0.0, 3.0)
+tspan = (0.0, 10.0)
 flow_direction = [1.0, 0.0]
 const prescribed_velocity = 1.0 # following https://doi.org/10.1016/j.cma.2020.113119 
 sound_speed = 10 * prescribed_velocity # following https://doi.org/10.1016/j.cma.2020.113119 
 
 # length of domain and initial fluid particle positions
-L = 300 # following http://dx.doi.org/10.1017/S0022112083002839 (200mm/500mm)
-h = 4.9 # following http://dx.doi.org/10.1017/S0022112083002839
+L = 40 # following http://dx.doi.org/10.1017/S0022112083002839 (200mm/500mm)
+h = 4.9 # Stepsize following http://dx.doi.org/10.1017/S0022112083002839
 reynolds_number = 389 # following https://doi.org/10.1016/j.cma.2020.113119
 fluid_density = 1225.0 # following https://doi.org/10.1016/j.cma.2020.113119
 
 # For this particular example, it is necessary to have a background pressure.
 # Otherwise the suction at the outflow is to big and the simulation becomes unstable.
-pressure = 1.0 # following https://doi.org/10.1016/j.cma.2020.113119
+pressure = 1000.0 # 1.0 following https://doi.org/10.1016/j.cma.2020.113119
 
 state_equation = StateEquationCole(; sound_speed, reference_density=fluid_density,
-                                   exponent=7, background_pressure=pressure)
+                                   exponent=7, background_pressure=pressure) #exponent 7
 
 fluid_size_inlet = (Int(floor(0.25 * L / particle_spacing)),
                     Int(floor(5.2 / particle_spacing)))
@@ -94,8 +94,8 @@ ic_boundary = union(boundary_top, boundary_bottom_left, boundary_bottom_right,
 
 # ==========================================================================================
 # ==== Fluid
-smoothing_length = 3.0 * particle_spacing
-smoothing_kernel = SchoenbergQuinticSplineKernel{2}() # following https://doi.org/10.1016/j.cma.2020.113119
+smoothing_length = 1.2 * particle_spacing
+smoothing_kernel = SchoenbergQuinticSplineKernel{2}() # SchoenbergQuinticSplineKernel/WendlandC2Kernel following https://doi.org/10.1016/j.cma.2020.113119
 
 fluid_density_calculator = ContinuityDensity()
 
@@ -103,7 +103,7 @@ kinematic_viscosity = 4 * h / (3 * reynolds_number * prescribed_velocity) # foll
 
 viscosity = ViscosityAdami(nu=kinematic_viscosity)
 
-n_buffer_particles = open_boundary_layers * fluid_size_outlet[2]
+n_buffer_particles = open_boundary_layers * fluid_size_outlet[2] * fluid_size_inlet[2]
 
 fluid_system = EntropicallyDampedSPHSystem(ic_fluid, smoothing_kernel,
                                            smoothing_length,
@@ -122,11 +122,19 @@ fluid_system = EntropicallyDampedSPHSystem(ic_fluid, smoothing_kernel,
 
 # ==========================================================================================
 # ==== Open Boundary
-function velocity_function(pos, t)
+function velocity_function_inlet(pos, t)
     # Use this for a time-dependent inflow velocity
     # return SVector(0.5prescribed_velocity * sin(2pi * t) + prescribed_velocity, 0)
 
     return SVector(prescribed_velocity, 0.0)
+end
+
+function velocity_function_outlet(pos, t)
+    # Use this for a time-dependent inflow velocity
+    # return SVector(0.5prescribed_velocity * sin(2pi * t) + prescribed_velocity, 0)
+
+    # return SVector((5.2 / (4.9 + 5.2)) * prescribed_velocity, 0.0)
+    return SVector((0.0, 0.0))
 end
 
 inflow = InFlow(; plane=([0.0, 0.0], [0.0, fluid_size_inlet[2] * particle_spacing]),
@@ -136,7 +144,7 @@ inflow = InFlow(; plane=([0.0, 0.0], [0.0, fluid_size_inlet[2] * particle_spacin
 open_boundary_in = OpenBoundarySPHSystem(inflow; sound_speed, fluid_system,
                                          buffer_size=n_buffer_particles,
                                          reference_pressure=pressure,
-                                         reference_velocity=velocity_function)
+                                         reference_velocity=velocity_function_inlet)
 
 outflow = OutFlow(;
                   plane=([
@@ -156,7 +164,7 @@ outflow = OutFlow(;
 open_boundary_out = OpenBoundarySPHSystem(outflow; sound_speed, fluid_system,
                                           buffer_size=n_buffer_particles,
                                           reference_pressure=pressure,
-                                          reference_velocity=velocity_function)
+                                          reference_velocity=velocity_function_outlet)
 
 # ==========================================================================================
 # ==== Boundary
@@ -165,7 +173,7 @@ boundary_model = BoundaryModelDummyParticles(ic_boundary.density,
                                              ic_boundary.mass,
                                              AdamiPressureExtrapolation(),
                                              state_equation=state_equation,
-                                             #viscosity=ViscosityAdami(nu=1e-4),
+                                             viscosity=viscosity,
                                              smoothing_kernel, smoothing_length)
 
 boundary_system = BoundarySPHSystem(ic_boundary, boundary_model)
@@ -177,7 +185,7 @@ semi = Semidiscretization(fluid_system, open_boundary_in, open_boundary_out,
 
 ode = semidiscretize(semi, tspan)
 
-info_callback = InfoCallback(interval=100)
+info_callback = InfoCallback(interval=50)
 saving_callback = SolutionSavingCallback(dt=0.02, prefix="",
                                          output_directory="out_my_simulation")
 

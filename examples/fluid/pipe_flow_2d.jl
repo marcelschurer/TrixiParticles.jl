@@ -18,14 +18,14 @@ open_boundary_layers = 6
 
 # ==========================================================================================
 # ==== Experiment Setup
-tspan = (0.0, 2.0)
+tspan = (0.0, 1.5)
 
 # Boundary geometry and initial fluid particle positions
-domain_size = (1.0, 0.4)
+domain_size = (100.0, 3.0)
 
 flow_direction = [1.0, 0.0]
 reynolds_number = 100
-const prescribed_velocity = 2.0
+const prescribed_velocity = 1.0
 
 boundary_size = (domain_size[1] + 2 * particle_spacing * open_boundary_layers,
                  domain_size[2])
@@ -48,7 +48,8 @@ pipe = RectangularTank(particle_spacing, domain_size, boundary_size, fluid_densi
 # Shift pipe walls in negative x-direction for the inflow
 pipe.boundary.coordinates[1, :] .-= particle_spacing * open_boundary_layers
 
-n_buffer_particles = 4 * pipe.n_particles_per_dimension[2]
+n_buffer_particles = 4 * pipe.n_particles_per_dimension[2] *
+                     pipe.n_particles_per_dimension[1]
 
 # ==========================================================================================
 # ==== Fluid
@@ -107,7 +108,7 @@ open_boundary_out = OpenBoundarySPHSystem(outflow; sound_speed, fluid_system,
 boundary_model = BoundaryModelDummyParticles(pipe.boundary.density, pipe.boundary.mass,
                                              AdamiPressureExtrapolation(),
                                              state_equation=state_equation,
-                                             #viscosity=ViscosityAdami(nu=1e-4),
+                                             viscosity=ViscosityAdami(nu=1e-4),
                                              smoothing_kernel, smoothing_length)
 
 boundary_system = BoundarySPHSystem(pipe.boundary, boundary_model)
@@ -120,7 +121,8 @@ semi = Semidiscretization(fluid_system, open_boundary_in, open_boundary_out,
 ode = semidiscretize(semi, tspan)
 
 info_callback = InfoCallback(interval=100)
-saving_callback = SolutionSavingCallback(dt=0.02, prefix="")
+saving_callback = SolutionSavingCallback(dt=0.02, prefix="",
+                                         output_directory="out_my_simulation")
 
 callbacks = CallbackSet(info_callback, saving_callback, UpdateCallback())
 
