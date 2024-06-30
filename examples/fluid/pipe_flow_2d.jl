@@ -18,7 +18,7 @@ open_boundary_layers = 6
 
 # ==========================================================================================
 # ==== Experiment Setup
-tspan = (0.0, 0.5)
+tspan = (0.0, 2.0)
 
 # Boundary geometry and initial fluid particle positions
 domain_size = (1.0, 0.4)
@@ -120,7 +120,8 @@ semi = Semidiscretization(fluid_system, open_boundary_in, open_boundary_out,
 ode = semidiscretize(semi, tspan)
 
 info_callback = InfoCallback(interval=100)
-saving_callback = SolutionSavingCallback(dt=0.02, prefix="")
+saving_callback = SolutionSavingCallback(dt=0.02, prefix="",
+                                         output_directory="out_my_simulation")
 
 callbacks = CallbackSet(info_callback, saving_callback, UpdateCallback())
 
