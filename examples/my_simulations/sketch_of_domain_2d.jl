@@ -31,7 +31,7 @@ fluid_density = 1225.0 # following https://doi.org/10.1016/j.cma.2020.113119
 
 # For this particular example, it is necessary to have a background pressure.
 # Otherwise the suction at the outflow is to big and the simulation becomes unstable.
-pressure = 1.0 # 1.0 following https://doi.org/10.1016/j.cma.2020.113119
+pressure = 2500.0 # 1.0 following https://doi.org/10.1016/j.cma.2020.113119
 
 state_equation = StateEquationCole(; sound_speed, reference_density=fluid_density,
                                    exponent=7, background_pressure=pressure)
@@ -145,7 +145,7 @@ inflow = InFlow(; plane=([0.0, 0.0], [0.0, fluid_size_inlet[2] * particle_spacin
 
 open_boundary_in = OpenBoundarySPHSystem(inflow; sound_speed, fluid_system,
                                          buffer_size=n_buffer_particles,
-                                         reference_pressure=pressure,
+                                         #reference_pressure=pressure,
                                          reference_velocity=velocity_function_inlet)
 
 outflow = OutFlow(;
@@ -165,8 +165,9 @@ outflow = OutFlow(;
 
 open_boundary_out = OpenBoundarySPHSystem(outflow; sound_speed, fluid_system,
                                           buffer_size=n_buffer_particles,
-                                          reference_pressure=pressure,
-                                          reference_velocity=velocity_function_outlet)
+                                          reference_pressure=pressure
+                                          #,reference_velocity=velocity_function_outlet
+                                          )
 
 # ==========================================================================================
 # ==== Boundary
