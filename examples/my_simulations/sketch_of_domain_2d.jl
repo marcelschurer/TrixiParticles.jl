@@ -8,7 +8,7 @@ using OrdinaryDiffEq
 particle_spacing = 0.1 # following https://doi.org/10.1016/j.cma.2020.113119
 
 # Make sure that the kernel support of fluid particles at a boundary is always fully sampled
-boundary_layers = 4
+boundary_layers = 5
 
 # Make sure that the kernel support of fluid particles at an open boundary is always
 # fully sampled.
@@ -27,7 +27,9 @@ sound_speed = 10 * prescribed_velocity # following https://doi.org/10.1016/j.cma
 L = 10 # following http://dx.doi.org/10.1017/S0022112083002839 (200mm/500mm)
 h = 4.9 # Stepsize following http://dx.doi.org/10.1017/S0022112083002839
 reynolds_number = 389 # following https://doi.org/10.1016/j.cma.2020.113119
-fluid_density = 1225.0 # following https://doi.org/10.1016/j.cma.2020.113119
+fluid_density = 997.0 # following https://doi.org/10.1016/j.cma.2020.113119
+#kinematic_viscosity = 4 * h / (3 * reynolds_number * prescribed_velocity) # following https://doi.org/10.1016/j.cma.2020.113119
+kinematic_viscosity = 0.001 # water at 20°C
 
 # For this particular example, it is necessary to have a background pressure.
 # Otherwise the suction at the outflow is to big and the simulation becomes unstable.
@@ -94,12 +96,10 @@ ic_boundary = union(boundary_top, boundary_bottom_left, boundary_bottom_right,
 
 # ==========================================================================================
 # ==== Fluid
-smoothing_length = 1.4 * particle_spacing
-smoothing_kernel = SchoenbergQuinticSplineKernel{2}() # SchoenbergQuinticSplineKernel/WendlandC2Kernel following https://doi.org/10.1016/j.cma.2020.113119
+smoothing_length = 3 * particle_spacing
+smoothing_kernel = WendlandC2Kernel{2}() # SchoenbergQuinticSplineKernel/WendlandC2Kernel following https://doi.org/10.1016/j.cma.2020.113119
 
 fluid_density_calculator = ContinuityDensity()
-
-kinematic_viscosity = 4 * h / (3 * reynolds_number * prescribed_velocity) # following https://doi.org/10.1016/j.cma.2020.113119
 
 n_buffer_particles = open_boundary_layers * fluid_size_outlet[2] * fluid_size_inlet[2]
 
@@ -174,7 +174,7 @@ open_boundary_out = OpenBoundarySPHSystem(outflow; sound_speed, fluid_system,
 boundary_model = BoundaryModelDummyParticles(ic_boundary.density,
                                              ic_boundary.mass,
                                              AdamiPressureExtrapolation(),
-                                             state_equation=state_equation,
+                                             #state_equation=state_equation,
                                              viscosity=viscosity,
                                              smoothing_kernel, smoothing_length)
 
