@@ -31,7 +31,7 @@ fluid_density = 1225.0 # following https://doi.org/10.1016/j.cma.2020.113119
 
 # For this particular example, it is necessary to have a background pressure.
 # Otherwise the suction at the outflow is to big and the simulation becomes unstable.
-pressure = 2500.0 # 1.0 following https://doi.org/10.1016/j.cma.2020.113119
+pressure = 1.0 # 1.0 following https://doi.org/10.1016/j.cma.2020.113119
 
 state_equation = StateEquationCole(; sound_speed, reference_density=fluid_density,
                                    exponent=7, background_pressure=pressure)
@@ -94,8 +94,8 @@ ic_boundary = union(boundary_top, boundary_bottom_left, boundary_bottom_right,
 
 # ==========================================================================================
 # ==== Fluid
-smoothing_length = 1.4 * particle_spacing
-smoothing_kernel = SchoenbergQuinticSplineKernel{2}() # SchoenbergQuinticSplineKernel/WendlandC2Kernel following https://doi.org/10.1016/j.cma.2020.113119
+smoothing_length = 3 * particle_spacing
+smoothing_kernel = WendlandC2Kernel{2}() # SchoenbergQuinticSplineKernel/WendlandC2Kernel following https://doi.org/10.1016/j.cma.2020.113119
 
 fluid_density_calculator = ContinuityDensity()
 
@@ -165,8 +165,8 @@ outflow = OutFlow(;
 
 open_boundary_out = OpenBoundarySPHSystem(outflow; sound_speed, fluid_system,
                                           buffer_size=n_buffer_particles,
-                                          reference_pressure=pressure
-                                          #,reference_velocity=velocity_function_outlet
+                                          reference_pressure=pressure,
+                                          #reference_velocity=velocity_function_outlet
                                           )
 
 # ==========================================================================================
@@ -175,7 +175,7 @@ open_boundary_out = OpenBoundarySPHSystem(outflow; sound_speed, fluid_system,
 boundary_model = BoundaryModelDummyParticles(ic_boundary.density,
                                              ic_boundary.mass,
                                              AdamiPressureExtrapolation(),
-                                             state_equation=state_equation,
+                                             #state_equation=state_equation,
                                              viscosity=viscosity,
                                              smoothing_kernel, smoothing_length)
 
