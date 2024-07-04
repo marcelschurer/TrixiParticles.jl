@@ -1,4 +1,4 @@
-# 2D backwards step simulation following:
+# 2D backward facing step simulation following:
 # http://dx.doi.org/10.1017/S0022112083002839
 # https://doi.org/10.1016/j.icheatmasstransfer.2011.07.003
 
