@@ -146,7 +146,7 @@ function Base.show(io::IO, ::MIME"text/plain", system::OpenBoundarySPHSystem)
     end
 end
 
-function reset_callback_flag(system::OpenBoundarySPHSystem)
+function reset_callback_flag!(system::OpenBoundarySPHSystem)
     system.update_callback_used[] = false
 
     return system
@@ -171,7 +171,7 @@ end
     reference_velocity, reference_pressure, reference_density) = system
 
     # Update quantities based on the characteristic variables
-    @threaded for particle in each_moving_particle(system)
+    @threaded system for particle in each_moving_particle(system)
         particle_position = current_coords(u, system, particle)
 
         J1 = characteristics[1, particle]
@@ -230,7 +230,7 @@ function evaluate_characteristics!(system, v, u, v_ode, u_ode, semi, t)
     # Thus, we compute the characteristics for the particles that are outside the influence
     # of fluid particles by using the average of the values of the previous time step.
     # See eq. 27 in Negi (2020) https://doi.org/10.1016/j.cma.2020.113119
-    @threaded for particle in each_moving_particle(system)
+    @threaded system for particle in each_moving_particle(system)
 
         # Particle is outside of the influence of fluid particles
         if isapprox(volume[particle], 0.0)
@@ -435,7 +435,8 @@ end
         v_new[dim, particle_new] = v_old[dim, particle_old]
     end
 
-    # TODO: Only when using TVF: set tvf
+    # Only when using TVF
+    set_transport_velocity!(system_new, particle_new, particle_old, v_new, v_old)
 
     return system_new
 end
