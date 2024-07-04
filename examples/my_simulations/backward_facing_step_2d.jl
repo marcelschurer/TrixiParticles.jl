@@ -1,4 +1,4 @@
-# 2D backwards step simulation following:
+# 2D backward facing step simulation following:
 # http://dx.doi.org/10.1017/S0022112083002839
 # https://doi.org/10.1016/j.icheatmasstransfer.2011.07.003
 
@@ -18,7 +18,7 @@ open_boundary_layers = 6
 
 # ==========================================================================================
 # ==== Experiment Setup
-tspan = (0.0, 15.0)
+tspan = (0.0, 10.0)
 flow_direction = [1.0, 0.0]
 
 # note that you might have to change velocity_function_outlet(pos, t) for another prescribed_velocity
@@ -227,7 +227,7 @@ ode = semidiscretize(semi, tspan)
 
 info_callback = InfoCallback(interval=50)
 saving_callback = SolutionSavingCallback(dt=0.02, prefix="",
-                                         output_directory="out_backwards_step_2d")
+                                         output_directory="out_backward_facing_step_2d")
 #output_directory="out_my_simulation")
 
 callbacks = CallbackSet(info_callback, saving_callback, UpdateCallback())
