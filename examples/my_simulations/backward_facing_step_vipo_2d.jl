@@ -19,7 +19,7 @@ open_boundary_layers = 6
 
 # ==========================================================================================
 # ==== Experiment Setup
-tspan = (0.0, 10.0)
+tspan = (0.0, 0.5)
 flow_direction = [1.0, 0.0]
 
 # note that you might have to change velocity_function_outlet(pos, t) for another prescribed_velocity
@@ -177,7 +177,6 @@ inflow = InFlow(; plane=([0.0, 0.0], [0.0, fluid_size_inlet[2] * particle_spacin
 
 open_boundary_in = OpenBoundarySPHSystem(inflow; sound_speed, fluid_system,
                                          buffer_size=n_buffer_particles,
-                                         reference_pressure=pressure,
                                          reference_velocity=velocity_function_inlet)
 
 outflow = OutFlow(;
@@ -197,8 +196,7 @@ outflow = OutFlow(;
 
 open_boundary_out = OpenBoundarySPHSystem(outflow; sound_speed, fluid_system,
                                           buffer_size=n_buffer_particles,
-                                          reference_pressure=pressure,
-                                          reference_velocity=velocity_function_outlet)
+                                          reference_pressure=pressure)
 
 # ==========================================================================================
 # ==== Boundary
@@ -228,7 +226,7 @@ ode = semidiscretize(semi, tspan)
 
 info_callback = InfoCallback(interval=50)
 saving_callback = SolutionSavingCallback(dt=0.02, prefix="",
-                                         output_directory="out_backward_facing_step_2d")
+                                         output_directory="out")
 #output_directory="out_my_simulation")
 
 callbacks = CallbackSet(info_callback, saving_callback, UpdateCallback())
