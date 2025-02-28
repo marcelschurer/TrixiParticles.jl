@@ -136,7 +136,7 @@ function trixi2vtk(v_, u_, t, system_, periodic_box; output_directory="out", pre
         pvd[t] = vtk
 
         # Save `meta_data`
-        if write_meta_data
+        if write_meta_data && iter == 0
             write2json!(system; output_directory, prefix, system_name, git_hash)
         end
     end
