@@ -1,12 +1,12 @@
 using TrixiParticles
 using OrdinaryDiffEq
 
-filename = "sphere"
+filename = "intake_manifold"
 file = pkgdir(TrixiParticles, "examples", "preprocessing", "data", filename * ".stl")
 
 # ==========================================================================================
 # ==== Resolution
-particle_spacing = 0.1
+particle_spacing = 0.002
 
 # The following depends on the sampling of the particles. In this case `boundary_thickness`
 # means literally the thickness of the boundary packed with boundary particles and *not*

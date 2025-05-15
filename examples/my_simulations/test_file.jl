@@ -1,22 +1,9 @@
 using TrixiParticles
 using OrdinaryDiffEq
-using LinearAlgebra
 
-# Create Dictionaries
-files = Dict()
-geometry = Dict()
-
-filenames = [
-    "intake_manifold",
-    "intake_manifold_sum",
-    "inlet",
-    "outlet_left",
-    "outlet_right"
-]
-for filename in filenames
-    files[filename] = pkgdir(TrixiParticles, "examples", "preprocessing", "data",
-                             filename * ".stl")
-end
+filename = "inlet"
+file = pkgdir(TrixiParticles, "examples", "preprocessing", "data",
+              filename * ".stl")
 
 # ==========================================================================================
 # ==== Packing parameters
@@ -35,21 +22,18 @@ boundary_thickness = 8 * particle_spacing
 # ==== Load complex geometry
 density = 1000.0
 pressure = 1.0e5
-state_equation = nothing
 
-for filename in filenames
-    geometry[filename] = load_geometry(files[filename])
-end
+geometry = load_geometry(file)
 
 point_in_geometry_algorithm = WindingNumberJacobson(;
-                                                    geometry=geometry["intake_manifold_sum"],
+                                                    geometry=geometry,
                                                     winding_number_factor=0.4,
                                                     hierarchical_winding=true)
 # Returns `InitialCondition`
-shape_sampled = ComplexShape(geometry["intake_manifold_sum"]; particle_spacing, density,
+shape_sampled = ComplexShape(geometry; particle_spacing, density,
                              point_in_geometry_algorithm=point_in_geometry_algorithm)
 
-signed_distance_field = SignedDistanceField(geometry["intake_manifold_sum"],
+signed_distance_field = SignedDistanceField(geometry,
                                             particle_spacing;
                                             use_for_boundary_packing=true,
                                             max_signed_distance=boundary_thickness)
@@ -63,7 +47,7 @@ boundary_sampled = sample_boundary(signed_distance_field; boundary_density=densi
 # Large `background_pressure` can cause high accelerations. That is, the adaptive
 # time-stepsize will be adjusted properly. We found that the following order of
 # `background_pressure` result in appropriate stepsizes.
-background_pressure = 1e6 * particle_spacing^ndims(geometry["intake_manifold_sum"])
+background_pressure = 1e6 * particle_spacing^ndims(geometry)
 
 packing_system = ParticlePackingSystem(shape_sampled;
                                        signed_distance_field, tlsph=tlsph,
@@ -101,19 +85,9 @@ sol = solve(ode, RDPK3SpFSAL35();
 ic_packed = InitialCondition(sol, packing_system, semi)
 ic_boundary = InitialCondition(sol, boundary_system, semi)
 
-ic_inlet = intersect(ic_packed, geometry["inlet"])
-ic_outlet_left = intersect(ic_packed, geometry["outlet_left"])
-ic_outlet_right = intersect(ic_packed, geometry["outlet_right"])
-
-# trixi2vtk(ic_inlet, filename="ic_inlet")
-# trixi2vtk(ic_outlet_left, filename="ic_outlet_left")
-# trixi2vtk(ic_outlet_right, filename="ic_outlet_right")
-# trixi2vtk(ic_packed, filename="ic_intake_manifold")
-# trixi2vtk(ic_boundary, filename="ic_boundary")
-
 # ==========================================================================================
 # ==== Fluid
-t_span_sim = [0.0, 0.5]
+t_span_sim = [0.0, 1.0]
 
 reynolds_number = 100
 const prescribed_velocity = 2.0
@@ -147,12 +121,8 @@ end
 
 open_boundary_model = BoundaryModelLastiwka()
 
-A = [-0.010606, 0.11675, -0.002136]
-B = [0.072195, 0.092376, -0.001068]
-C = [0.023133, 0.10682, 0.042448]
-flow_direction = -normalize(cross(B .- A, C .- A))
-plane_in = (A, B, C)
-
+flow_direction = [1.0, 0.0, 0.0]
+plane_in = ([0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0])
 inflow = BoundaryZone(; plane=plane_in, plane_normal=flow_direction,
                       density=density, particle_spacing=particle_spacing,
                       open_boundary_layers=4, initial_condition=ic_packed,
@@ -169,22 +139,10 @@ open_boundary_in = OpenBoundarySPHSystem(inflow; fluid_system,
                                          reference_velocity=reference_velocity_in)
 
 # ==========================================================================================
-# ==== Boundary
-viscosity_boundary = ViscosityAdami(nu=1e-4)
-boundary_model = BoundaryModelDummyParticles(ic_boundary.density, ic_boundary.mass,
-                                             AdamiPressureExtrapolation(),
-                                             state_equation=state_equation,
-                                             viscosity=viscosity_boundary,
-                                             smoothing_kernel, smoothing_length)
-
-boundary_system = BoundarySPHSystem(ic_boundary, boundary_model)
-
-# ==========================================================================================
 # ==== Simulation
-semi = Semidiscretization(fluid_system, boundary_system, open_boundary_in,
-                          parallelization_backend=true)
+semi = Semidiscretization(open_boundary_in, parallelization_backend=true)
 
-ode = semidiscretize(semi, t_span_sim)
+ode = semidiscretize(semi, tspan)
 
 info_callback = InfoCallback(interval=100)
 saving_callback = SolutionSavingCallback(dt=0.02, prefix="")
