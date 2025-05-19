@@ -104,6 +104,7 @@ ic_boundary = InitialCondition(sol, boundary_system, semi)
 ic_inlet = intersect(ic_packed, geometry["inlet"])
 ic_outlet_left = intersect(ic_packed, geometry["outlet_left"])
 ic_outlet_right = intersect(ic_packed, geometry["outlet_right"])
+ic_intake_manifold = intersect(ic_packed, geometry["intake_manifold"])
 
 # trixi2vtk(ic_inlet, filename="ic_inlet")
 # trixi2vtk(ic_outlet_left, filename="ic_outlet_left")
@@ -130,13 +131,20 @@ viscosity = ViscosityAdami(nu=kinematic_viscosity)
 n_buffer_particles = 40000
 sound_speed = 10*prescribed_velocity
 
-fluid_system = EntropicallyDampedSPHSystem(ic_packed, smoothing_kernel, smoothing_length,
+fluid_system = EntropicallyDampedSPHSystem(ic_intake_manifold, smoothing_kernel, smoothing_length,
                                            sound_speed, viscosity=viscosity,
                                            density_calculator=fluid_density_calculator,
                                            buffer_size=n_buffer_particles)
 
 # ==========================================================================================
 # ==== Open Boundary
+open_boundary_model = BoundaryModelLastiwka()
+
+A = [-0.010606, 0.11675, -0.002136]
+B = [0.072195, 0.092376, -0.001068]
+C = [0.023133, 0.10682, 0.042448]
+flow_direction = normalize(cross(B .- A, C .- A))
+plane_in = (A, B, C)
 
 function velocity_function3d(pos, t)
     # Use this for a time-dependent inflow velocity
@@ -145,17 +153,9 @@ function velocity_function3d(pos, t)
     return SVector(prescribed_velocity, 0.0, 0.0)
 end
 
-open_boundary_model = BoundaryModelLastiwka()
-
-A = [-0.010606, 0.11675, -0.002136]
-B = [0.072195, 0.092376, -0.001068]
-C = [0.023133, 0.10682, 0.042448]
-flow_direction = -normalize(cross(B .- A, C .- A))
-plane_in = (A, B, C)
-
 inflow = BoundaryZone(; plane=plane_in, plane_normal=flow_direction,
                       density=density, particle_spacing=particle_spacing,
-                      open_boundary_layers=4, initial_condition=ic_packed,
+                      open_boundary_layers=6, initial_condition=ic_inlet,
                       boundary_type=InFlow())
 
 reference_velocity_in = velocity_function3d
@@ -181,8 +181,7 @@ boundary_system = BoundarySPHSystem(ic_boundary, boundary_model)
 
 # ==========================================================================================
 # ==== Simulation
-semi = Semidiscretization(fluid_system, boundary_system, open_boundary_in,
-                          parallelization_backend=true)
+semi = Semidiscretization(fluid_system, boundary_system, open_boundary_in)
 
 ode = semidiscretize(semi, t_span_sim)
 
