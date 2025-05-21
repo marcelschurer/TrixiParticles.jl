@@ -24,7 +24,7 @@ tlsph = true
 
 # ==========================================================================================
 # ==== Resolution
-particle_spacing = 0.002
+particle_spacing = 0.005
 
 # The following depends on the sampling of the particles. In this case `boundary_thickness`
 # means literally the thickness of the boundary packed with boundary particles and *not*
@@ -33,8 +33,8 @@ boundary_thickness = 8 * particle_spacing
 
 # ==========================================================================================
 # ==== Load complex geometry
-density = 1000.0
-pressure = 1.0e5
+density = 1.225 # kg/m³ Air at 15 °C
+pressure = 101325 # Pa
 state_equation = nothing
 
 for filename in filenames
@@ -116,58 +116,96 @@ ic_intake_manifold = intersect(ic_packed, geometry["intake_manifold"])
 # ==== Fluid
 t_span_sim = [0.0, 0.5]
 
-reynolds_number = 100
-const prescribed_velocity = 2.0
+const prescribed_velocity = 27.78 # m/s (100 km/h)
 
 smoothing_length = 1.5 * particle_spacing
 smoothing_kernel = WendlandC2Kernel{3}()
 
 fluid_density_calculator = ContinuityDensity()
 
-kinematic_viscosity = prescribed_velocity * 50.0 / reynolds_number
-
+kinematic_viscosity = 1.48e-5 # m²/s (Air at 15 °C)
 viscosity = ViscosityAdami(nu=kinematic_viscosity)
 
-n_buffer_particles = 40000
+n_buffer_particles = 4000
 sound_speed = 10*prescribed_velocity
 
-fluid_system = EntropicallyDampedSPHSystem(ic_intake_manifold, smoothing_kernel, smoothing_length,
+fluid_system = EntropicallyDampedSPHSystem(ic_intake_manifold, smoothing_kernel,
+                                           smoothing_length,
                                            sound_speed, viscosity=viscosity,
                                            density_calculator=fluid_density_calculator,
                                            buffer_size=n_buffer_particles)
 
 # ==========================================================================================
 # ==== Open Boundary
-open_boundary_model = BoundaryModelLastiwka()
+open_boundary_model = BoundaryModelTafuni()
 
-A = [-0.010606, 0.11675, -0.002136]
-B = [0.072195, 0.092376, -0.001068]
-C = [0.023133, 0.10682, 0.042448]
-flow_direction = normalize(cross(B .- A, C .- A))
-plane_in = (A, B, C)
+A_inlet = [-0.049453, 0.128185, -0.017353] # Original: [-0.010606, 0.11675, -0.002136]
+B_inlet = [0.116149, 0.079437, -0.015217] # Original: [0.072195, 0.092376, -0.001068]
+C_inlet = [0.018025, 0.108325, 0.071815] # Original: [0.023133, 0.10682, 0.042448]
+plane_inlet = (A_inlet, B_inlet, C_inlet)
+
+flow_direction_inlet = normalize(cross(B_inlet .- A_inlet, C_inlet .- A_inlet))
 
 function velocity_function3d(pos, t)
     # Use this for a time-dependent inflow velocity
     # return SVector(0.5prescribed_velocity * sin(2pi * t) + prescribed_velocity, 0)
 
-    return SVector(prescribed_velocity, 0.0, 0.0)
+    return SVector(prescribed_velocity * flow_direction_inlet...)
 end
 
-inflow = BoundaryZone(; plane=plane_in, plane_normal=flow_direction,
+inflow = BoundaryZone(; plane=plane_inlet, plane_normal=flow_direction_inlet,
                       density=density, particle_spacing=particle_spacing,
-                      open_boundary_layers=6, initial_condition=ic_inlet,
+                      open_boundary_layers=10, initial_condition=ic_inlet,
                       boundary_type=InFlow())
 
-reference_velocity_in = velocity_function3d
-reference_pressure_in = pressure
-reference_density_in = density
+reference_velocity = velocity_function3d
+reference_pressure = pressure
+reference_density = density
 open_boundary_in = OpenBoundarySPHSystem(inflow; fluid_system,
                                          boundary_model=open_boundary_model,
                                          buffer_size=n_buffer_particles,
-                                         reference_density=reference_density_in,
-                                         reference_pressure=reference_pressure_in,
-                                         reference_velocity=reference_velocity_in)
+                                         reference_density=reference_density,
+                                         reference_velocity=reference_velocity)
 
+A_outlet_right = [-0.077124, -0.017918, 0.089082]  # Original: [-0.077124, -0.010139, 0.04515]
+B_outlet_right = [-0.077124, -0.077018, -0.048794] # Original: [-0.077124, -0.039689, -0.023788]
+C_outlet_right = [-0.077124, 0.087857, -0.036635]  # Original: [-0.077124, 0.042749, -0.017708]
+plane_outlet_right = (A_outlet_right, B_outlet_right, C_outlet_right)
+
+flow_direction_outlet_right = normalize(cross(B_outlet_right .- A_outlet_right,
+                                              C_outlet_right .- A_outlet_right))
+
+outflow_right = BoundaryZone(; plane=plane_outlet_right,
+                             plane_normal=flow_direction_outlet_right,
+                             density=density, particle_spacing=particle_spacing,
+                             open_boundary_layers=10, initial_condition=ic_outlet_right,
+                             boundary_type=OutFlow())
+
+open_boundary_out_right = OpenBoundarySPHSystem(outflow_right; fluid_system,
+                                                boundary_model=open_boundary_model,
+                                                buffer_size=n_buffer_particles,
+                                                reference_density=reference_density,
+                                                reference_pressure=reference_pressure)
+
+A_outlet_left = [0.088435, 0.001141, -0.087458]   # Original: [0.088435, 0.001664, -0.046244]
+B_outlet_left = [0.088435, -0.082244, 0.049694]   # Original: [0.088435, -0.040529, 0.022332]
+C_outlet_left = [0.088435, 0.088663, 0.021676]    # Original: [0.088435, 0.045425, 0.008823]
+plane_outlet_left = (A_outlet_left, B_outlet_left, C_outlet_left)
+
+flow_direction_outlet_left = normalize(cross(B_outlet_left .- A_outlet_left,
+                                             C_outlet_left .- A_outlet_left))
+
+outflow_left = BoundaryZone(; plane=plane_outlet_left,
+                            plane_normal=flow_direction_outlet_left,
+                            density=density, particle_spacing=particle_spacing,
+                            open_boundary_layers=10, initial_condition=ic_outlet_left,
+                            boundary_type=OutFlow())
+
+open_boundary_out_left = OpenBoundarySPHSystem(outflow_left; fluid_system,
+                                               boundary_model=open_boundary_model,
+                                               buffer_size=n_buffer_particles,
+                                               reference_density=reference_density,
+                                               reference_pressure=reference_pressure)
 # ==========================================================================================
 # ==== Boundary
 viscosity_boundary = ViscosityAdami(nu=1e-4)
@@ -181,7 +219,9 @@ boundary_system = BoundarySPHSystem(ic_boundary, boundary_model)
 
 # ==========================================================================================
 # ==== Simulation
-semi = Semidiscretization(fluid_system, boundary_system, open_boundary_in)
+semi = Semidiscretization(fluid_system, boundary_system, open_boundary_in,
+                          open_boundary_out_left,
+                          open_boundary_out_right,parallelization_backend=PolyesterBackend())
 
 ode = semidiscretize(semi, t_span_sim)
 

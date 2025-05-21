@@ -1,9 +1,22 @@
 using TrixiParticles
 using OrdinaryDiffEq
+using LinearAlgebra
 
-filename = "inlet"
-file = pkgdir(TrixiParticles, "examples", "preprocessing", "data",
-              filename * ".stl")
+# Create Dictionaries
+files = Dict()
+geometry = Dict()
+
+filenames = [
+    "intake_manifold",
+    "intake_manifold_sum",
+    "inlet",
+    "outlet_left",
+    "outlet_right"
+]
+for filename in filenames
+    files[filename] = pkgdir(TrixiParticles, "examples", "preprocessing", "data",
+                             filename * ".stl")
+end
 
 # ==========================================================================================
 # ==== Packing parameters
@@ -22,18 +35,21 @@ boundary_thickness = 8 * particle_spacing
 # ==== Load complex geometry
 density = 1000.0
 pressure = 1.0e5
+state_equation = nothing
 
-geometry = load_geometry(file)
+for filename in filenames
+    geometry[filename] = load_geometry(files[filename])
+end
 
 point_in_geometry_algorithm = WindingNumberJacobson(;
-                                                    geometry=geometry,
+                                                    geometry=geometry["intake_manifold_sum"],
                                                     winding_number_factor=0.4,
                                                     hierarchical_winding=true)
 # Returns `InitialCondition`
-shape_sampled = ComplexShape(geometry; particle_spacing, density,
+shape_sampled = ComplexShape(geometry["intake_manifold_sum"]; particle_spacing, density,
                              point_in_geometry_algorithm=point_in_geometry_algorithm)
 
-signed_distance_field = SignedDistanceField(geometry,
+signed_distance_field = SignedDistanceField(geometry["intake_manifold_sum"],
                                             particle_spacing;
                                             use_for_boundary_packing=true,
                                             max_signed_distance=boundary_thickness)
@@ -47,7 +63,7 @@ boundary_sampled = sample_boundary(signed_distance_field; boundary_density=densi
 # Large `background_pressure` can cause high accelerations. That is, the adaptive
 # time-stepsize will be adjusted properly. We found that the following order of
 # `background_pressure` result in appropriate stepsizes.
-background_pressure = 1e6 * particle_spacing^ndims(geometry)
+background_pressure = 1e6 * particle_spacing^ndims(geometry["intake_manifold_sum"])
 
 packing_system = ParticlePackingSystem(shape_sampled;
                                        signed_distance_field, tlsph=tlsph,
@@ -85,74 +101,15 @@ sol = solve(ode, RDPK3SpFSAL35();
 ic_packed = InitialCondition(sol, packing_system, semi)
 ic_boundary = InitialCondition(sol, boundary_system, semi)
 
-# ==========================================================================================
-# ==== Fluid
-t_span_sim = [0.0, 1.0]
+ic_inlet = intersect(ic_packed, geometry["inlet"])
+ic_outlet_left = intersect(ic_packed, geometry["outlet_left"])
+ic_outlet_right = intersect(ic_packed, geometry["outlet_right"])
+ic_intake_manifold = intersect(ic_packed, geometry["intake_manifold"])
 
-reynolds_number = 100
-const prescribed_velocity = 2.0
-
-smoothing_length = 1.5 * particle_spacing
-smoothing_kernel = WendlandC2Kernel{3}()
-
-fluid_density_calculator = ContinuityDensity()
-
-kinematic_viscosity = prescribed_velocity * 50.0 / reynolds_number
-
-viscosity = ViscosityAdami(nu=kinematic_viscosity)
-
-n_buffer_particles = 40000
-sound_speed = 10*prescribed_velocity
-
-fluid_system = EntropicallyDampedSPHSystem(ic_packed, smoothing_kernel, smoothing_length,
-                                           sound_speed, viscosity=viscosity,
-                                           density_calculator=fluid_density_calculator,
-                                           buffer_size=n_buffer_particles)
-
-# ==========================================================================================
-# ==== Open Boundary
-
-function velocity_function3d(pos, t)
-    # Use this for a time-dependent inflow velocity
-    # return SVector(0.5prescribed_velocity * sin(2pi * t) + prescribed_velocity, 0)
-
-    return SVector(prescribed_velocity, 0.0, 0.0)
-end
-
-open_boundary_model = BoundaryModelLastiwka()
-
-flow_direction = [1.0, 0.0, 0.0]
-plane_in = ([0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0])
-inflow = BoundaryZone(; plane=plane_in, plane_normal=flow_direction,
-                      density=density, particle_spacing=particle_spacing,
-                      open_boundary_layers=4, initial_condition=ic_packed,
-                      boundary_type=InFlow())
-
-reference_velocity_in = velocity_function3d
-reference_pressure_in = pressure
-reference_density_in = density
-open_boundary_in = OpenBoundarySPHSystem(inflow; fluid_system,
-                                         boundary_model=open_boundary_model,
-                                         buffer_size=n_buffer_particles,
-                                         reference_density=reference_density_in,
-                                         reference_pressure=reference_pressure_in,
-                                         reference_velocity=reference_velocity_in)
-
-# ==========================================================================================
-# ==== Simulation
-semi = Semidiscretization(open_boundary_in, parallelization_backend=true)
-
-ode = semidiscretize(semi, tspan)
-
-info_callback = InfoCallback(interval=100)
-saving_callback = SolutionSavingCallback(dt=0.02, prefix="")
-
-extra_callback = nothing
-
-callbacks = CallbackSet(info_callback, saving_callback, UpdateCallback(), extra_callback)
-
-sol = solve(ode, RDPK3SpFSAL35(),
-            abstol=1e-5, # Default abstol is 1e-6 (may need to be tuned to prevent boundary penetration)
-            reltol=1e-3, # Default reltol is 1e-3 (may need to be tuned to prevent boundary penetration)
-            dtmax=1e-2, # Limit stepsize to prevent crashing
-            save_everystep=false, callback=callbacks);
+trixi2vtk(ic_inlet, filename="ic_inlet", output_directory="sampled_geometries")
+trixi2vtk(ic_outlet_left, filename="ic_outlet_left", output_directory="sampled_geometries")
+trixi2vtk(ic_outlet_right, filename="ic_outlet_right",
+          output_directory="sampled_geometries")
+trixi2vtk(ic_intake_manifold, filename="ic_intake_manifold",
+          output_directory="sampled_geometries")
+trixi2vtk(ic_boundary, filename="ic_boundary", output_directory="sampled_geometries")
