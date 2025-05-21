@@ -24,17 +24,16 @@ tlsph = true
 
 # ==========================================================================================
 # ==== Resolution
-particle_spacing = 0.005
+particle_spacing = 0.002
 
 # The following depends on the sampling of the particles. In this case `boundary_thickness`
 # means literally the thickness of the boundary packed with boundary particles and *not*
 # how many rows of boundary particles will be sampled.
-boundary_thickness = 8 * particle_spacing
+boundary_thickness = 4 * particle_spacing
 
 # ==========================================================================================
 # ==== Load complex geometry
 density = 1.225 # kg/m³ Air at 15 °C
-pressure = 101325 # Pa
 state_equation = nothing
 
 for filename in filenames
@@ -64,6 +63,8 @@ boundary_sampled = sample_boundary(signed_distance_field; boundary_density=densi
 # time-stepsize will be adjusted properly. We found that the following order of
 # `background_pressure` result in appropriate stepsizes.
 background_pressure = 1e6 * particle_spacing^ndims(geometry["intake_manifold_sum"])
+pressure =  1e6 * particle_spacing^ndims(geometry["intake_manifold_sum"])
+#pressure = 101325 # Pa
 
 packing_system = ParticlePackingSystem(shape_sampled;
                                        signed_distance_field, tlsph=tlsph,
@@ -116,7 +117,7 @@ ic_intake_manifold = intersect(ic_packed, geometry["intake_manifold"])
 # ==== Fluid
 t_span_sim = [0.0, 0.5]
 
-const prescribed_velocity = 27.78 # m/s (100 km/h)
+const prescribed_velocity = 2.0 #27.78 # m/s (100 km/h)
 
 smoothing_length = 1.5 * particle_spacing
 smoothing_kernel = WendlandC2Kernel{3}()
@@ -126,7 +127,7 @@ fluid_density_calculator = ContinuityDensity()
 kinematic_viscosity = 1.48e-5 # m²/s (Air at 15 °C)
 viscosity = ViscosityAdami(nu=kinematic_viscosity)
 
-n_buffer_particles = 4000
+n_buffer_particles = 400000
 sound_speed = 10*prescribed_velocity
 
 fluid_system = EntropicallyDampedSPHSystem(ic_intake_manifold, smoothing_kernel,
@@ -155,7 +156,7 @@ end
 
 inflow = BoundaryZone(; plane=plane_inlet, plane_normal=flow_direction_inlet,
                       density=density, particle_spacing=particle_spacing,
-                      open_boundary_layers=10, initial_condition=ic_inlet,
+                      open_boundary_layers=4, initial_condition=ic_inlet,
                       boundary_type=InFlow())
 
 reference_velocity = velocity_function3d
@@ -178,7 +179,7 @@ flow_direction_outlet_right = normalize(cross(B_outlet_right .- A_outlet_right,
 outflow_right = BoundaryZone(; plane=plane_outlet_right,
                              plane_normal=flow_direction_outlet_right,
                              density=density, particle_spacing=particle_spacing,
-                             open_boundary_layers=10, initial_condition=ic_outlet_right,
+                             open_boundary_layers=4, initial_condition=ic_outlet_right,
                              boundary_type=OutFlow())
 
 open_boundary_out_right = OpenBoundarySPHSystem(outflow_right; fluid_system,
@@ -198,7 +199,7 @@ flow_direction_outlet_left = normalize(cross(B_outlet_left .- A_outlet_left,
 outflow_left = BoundaryZone(; plane=plane_outlet_left,
                             plane_normal=flow_direction_outlet_left,
                             density=density, particle_spacing=particle_spacing,
-                            open_boundary_layers=10, initial_condition=ic_outlet_left,
+                            open_boundary_layers=4, initial_condition=ic_outlet_left,
                             boundary_type=OutFlow())
 
 open_boundary_out_left = OpenBoundarySPHSystem(outflow_left; fluid_system,
@@ -221,12 +222,13 @@ boundary_system = BoundarySPHSystem(ic_boundary, boundary_model)
 # ==== Simulation
 semi = Semidiscretization(fluid_system, boundary_system, open_boundary_in,
                           open_boundary_out_left,
-                          open_boundary_out_right,parallelization_backend=PolyesterBackend())
+                          open_boundary_out_right,
+                          parallelization_backend=PolyesterBackend())
 
 ode = semidiscretize(semi, t_span_sim)
 
 info_callback = InfoCallback(interval=100)
-saving_callback = SolutionSavingCallback(dt=0.02, prefix="")
+saving_callback = SolutionSavingCallback(dt=0.01, prefix="")
 
 extra_callback = nothing
 
