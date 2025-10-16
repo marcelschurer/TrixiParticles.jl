@@ -39,6 +39,7 @@ function vtk2trixi(file)
 
     # Retrieve fields
     ndims = first(ReadVTK.get_data(field_data["ndims"]))
+    time = first(ReadVTK.get_data(field_data["time"]))
     coordinates = ReadVTK.get_points(vtk_file)[1:ndims, :]
 
     fields = ["velocity", "density", "pressure", "mass", "particle_spacing"]
@@ -62,9 +63,10 @@ function vtk2trixi(file)
                        first(results["particle_spacing"]) :
                        results["particle_spacing"]
 
-    return InitialCondition(; coordinates, particle_spacing=particle_spacing,
-                            velocity=results["velocity"],
-                            mass=results["mass"],
-                            density=results["density"],
-                            pressure=results["pressure"])
+    return (time=time, coordinates=coordinates,
+            particle_spacing=particle_spacing,
+            velocity=results["velocity"],
+            mass=results["mass"],
+            density=results["density"],
+            pressure=results["pressure"])
 end

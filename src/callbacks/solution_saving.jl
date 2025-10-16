@@ -23,6 +23,7 @@ To ignore a custom quantity for a specific system, return `nothing`.
 - `save_times=[]`               List of times at which to save a solution.
 - `save_initial_solution=true`: Save the initial solution.
 - `save_final_solution=true`:   Save the final solution.
+- `save_script=false`:          Save the simulation script.
 - `output_directory="out"`:     Directory to save the VTK files.
 - `append_timestamp=false`:     Append current timestamp to the output directory.
 - `prefix=""`:                  Prefix added to the filename.
@@ -58,6 +59,7 @@ saving_callback = SolutionSavingCallback(dt=0.1, my_custom_quantity=kinetic_ener
 │ custom quantities: ……………………………… [:my_custom_quantity => TrixiParticles.kinetic_energy]           │
 │ save initial solution: …………………… yes                                                              │
 │ save final solution: ………………………… yes                                                              │
+│ save script: ……………………………………………… no                                                               │
 │ output directory: ………………………………… *path ignored with filter regex above*                           │
 │ prefix: ……………………………………………………………                                                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -68,6 +70,7 @@ mutable struct SolutionSavingCallback{I, CQ}
     save_times            :: Vector{Float64}
     save_initial_solution :: Bool
     save_final_solution   :: Bool
+    save_script           :: Bool
     verbose               :: Bool
     output_directory      :: String
     prefix                :: String
@@ -79,7 +82,7 @@ end
 
 function SolutionSavingCallback(; interval::Integer=0, dt=0.0,
                                 save_times=Float64[],
-                                save_initial_solution=true, save_final_solution=true,
+                                save_initial_solution=true, save_final_solution=true, save_script=false,
                                 output_directory="out", append_timestamp=false,
                                 prefix="", verbose=false,
                                 max_coordinates=Float64(2^15),
@@ -98,7 +101,7 @@ function SolutionSavingCallback(; interval::Integer=0, dt=0.0,
     end
 
     solution_callback = SolutionSavingCallback(interval, Float64.(save_times),
-                                               save_initial_solution, save_final_solution,
+                                               save_initial_solution, save_final_solution, save_script,
                                                verbose, output_directory, prefix,
                                                max_coordinates, custom_quantities,
                                                -1, Ref("UnknownVersion"))
@@ -132,6 +135,10 @@ function initialize_save_cb!(solution_callback::SolutionSavingCallback, u, t, in
     solution_callback.git_hash[] = compute_git_hash()
 
     write_meta_data(solution_callback, integrator)
+
+    if solution_callback.save_script
+        TrixiParticles.write_simulation_script(solution_callback)
+    end
 
     # Save initial solution
     if solution_callback.save_initial_solution

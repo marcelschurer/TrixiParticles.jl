@@ -106,5 +106,6 @@ export SurfaceTensionAkinci, CohesionForceAkinci, SurfaceTensionMorris,
        SurfaceTensionMomentumMorris
 export ColorfieldSurfaceNormal
 export SymplecticPositionVerlet
+export restart_simulation
 
 end # module
