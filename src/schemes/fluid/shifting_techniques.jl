@@ -7,7 +7,7 @@ abstract type AbstractShiftingTechnique end
 # The version for a specific system type will override this generic version.
 requires_update_callback(system) = requires_update_callback(shifting_technique(system))
 requires_update_callback(::Nothing) = false
-requires_update_callback(::AbstractShiftingTechnique) = true
+requires_update_callback(::AbstractShiftingTechnique) = false
 
 # This is called from the `UpdateCallback`
 particle_shifting_from_callback!(u_ode, shifting, system, v_ode, semi, dt) = u_ode
@@ -302,6 +302,10 @@ function ConsistentShiftingSun2019(; kwargs...)
                                      kwargs...)
 end
 
+# `ParticleShiftingTechnique{<:Any, false}` means `update_everystage=false`,
+# so the `UpdateCallback` is required to update the shifting velocity.
+requires_update_callback(::ParticleShiftingTechnique{<:Any, false}) = true
+
 # `ParticleShiftingTechnique{false}` means `integrate_shifting_velocity=false`.
 # Zero if PST is applied in a callback as a position correction
 # and not with a shifting velocity in the time integration stages
@@ -490,6 +494,8 @@ function update_shifting_inner!(system, shifting::ParticleShiftingTechnique,
         end
     end
 
+    modify_shifting_at_free_surfaces!(system, u, semi)
+
     return system
 end
 
@@ -590,6 +596,12 @@ end
                                  distance, grad_kernel, correction)
 end
 
+# The function above misuses the pressure acceleration function by passing a Matrix as `p_a`.
+# This doesn't work with `tensile_instability_control`, so we disable TIC in this case.
+@inline function tensile_instability_control(m_a, m_b, rho_a, rho_b, p_a::SMatrix, p_b, W_a)
+    return pressure_acceleration_continuity_density(m_a, m_b, rho_a, rho_b, p_a, A_b, W_a)
+end
+
 function continuity_equation_shifting!(dv, shifting::TransportVelocityAdami{true},
                                        particle_system, neighbor_system,
                                        particle, neighbor, grad_kernel, rho_a, rho_b, m_b)
@@ -603,8 +615,7 @@ end
 
 function update_shifting!(system, shifting::TransportVelocityAdami, v, u, v_ode,
                           u_ode, semi)
-    (; cache, correction) = system
-    (; delta_v) = cache
+    (; delta_v) = system.cache
     (; background_pressure) = shifting
 
     sound_speed = system_sound_speed(system)
@@ -672,7 +683,8 @@ function update_shifting!(system, shifting::TransportVelocityAdami, v, u, v_ode,
             delta_v_ = background_pressure / 8 * h / sound_speed *
                        pressure_acceleration(system, neighbor_system, particle, neighbor,
                                              m_a, m_b, 1, 1, rho_a, rho_b, pos_diff,
-                                             distance, grad_kernel, correction)
+                                             distance, grad_kernel,
+                                             system_correction(system))
 
             # Write into the buffer
             for i in eachindex(delta_v_)
@@ -681,5 +693,10 @@ function update_shifting!(system, shifting::TransportVelocityAdami, v, u, v_ode,
         end
     end
 
+    modify_shifting_at_free_surfaces!(system, u, semi)
+
     return system
 end
+
+# TODO: Implement free surface detection to disable shifting close to free surfaces
+@inline modify_shifting_at_free_surfaces!(system, u, semi) = system
